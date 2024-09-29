@@ -1,22 +1,75 @@
 // index.js
 
 const { Client } = require("whatsapp-web.js");
-const qrcode = require("qrcode-terminal");
+const express = require("express");
 const axios = require("axios");
 require("dotenv").config();
+const qrcode = require("qrcode");
+
+const app = express();
+const port = process.env.PORT || 3000;
+
+// Base URL for constructing full URLs
+const baseUrl = process.env.BASE_URL || `http://localhost:${port}`;
 
 // Initialize WhatsApp client without session persistence
 const client = new Client();
 
-client.on("qr", (qr) => {
-  qrcode.generate(qr, { small: true });
-  console.log(
-    "QR code received, please scan it with your WhatsApp Business app."
-  );
+let qrCodeImageUrl = null;
+
+// Root endpoint to show basic info
+app.get("/", (req, res) => {
+  res.send(`
+    <html>
+      <body>
+        <h1>Welcome to the WhatsApp ChatGPT Bot</h1>
+        <p>This bot integrates WhatsApp with OpenAI's GPT-3.5-turbo model.</p>
+        <p>To authenticate, please navigate to <a href="/qr">${baseUrl}/qr</a> to scan the QR code with your WhatsApp app.</p>
+      </body>
+    </html>
+  `);
+});
+
+// Endpoint to get QR code
+app.get("/qr", (req, res) => {
+  if (qrCodeImageUrl) {
+    res.send(`
+      <html>
+        <body>
+          <h1>Scan the QR Code with your WhatsApp</h1>
+          <img src="${qrCodeImageUrl}" alt="QR Code" />
+        </body>
+      </html>
+    `);
+  } else {
+    res.send("QR Code not available. Please wait...");
+  }
+});
+
+// Start the Express server
+app.listen(port, () => {
+  console.log(`Express server is running on port ${port}`);
+});
+
+// Conversation history map
+const conversationHistory = {};
+
+// Command handling and message processing
+client.on("qr", async (qr) => {
+  try {
+    // Generate QR code image URL
+    qrCodeImageUrl = await qrcode.toDataURL(qr);
+
+    console.log(`QR code generated. Please scan it from ${baseUrl}/qr`);
+  } catch (err) {
+    console.error("Error generating QR code:", err);
+  }
 });
 
 client.on("authenticated", () => {
   console.log("Authenticated successfully!");
+  // Clear the QR code after authentication
+  qrCodeImageUrl = null;
 });
 
 client.on("auth_failure", (msg) => {
@@ -33,10 +86,7 @@ client.on("disconnected", (reason) => {
 
 client.initialize();
 
-// Conversation history map
-const conversationHistory = {};
-
-// Command handling and message processing
+// Message handler
 client.on("message", async (message) => {
   console.log(`Received message from ${message.from}: ${message.body}`);
 
